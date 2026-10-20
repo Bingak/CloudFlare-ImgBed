@@ -66,7 +66,7 @@ jobs:
         id: config
         if: steps.check.outputs.skip != 'true'
         env:
-          WORKER_NAME: ${{ inputs.worker_name || secrets.WORKER_NAME }}
+          WORKER_NAME: ${{ inputs.worker_name || 'lonelybing-img' }}
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           KV_NAMESPACE_ID: ${{ secrets.KV_NAMESPACE_ID }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
