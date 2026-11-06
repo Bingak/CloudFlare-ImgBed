@@ -83,7 +83,8 @@ export async function fetchUploadConfig(env, context = null) {
             s3: { channels: [] },
             discord: { channels: [] },
             huggingface: { channels: [] },
-            webdav: { channels: [] }
+            webdav: { channels: [] },
+            videoCompression: { enabled: false }
         };
     }
 }

@@ -134,6 +134,44 @@ CloudFlare ImgBed 是支持 Docker 与 Serverless 部署的自建图床和文件
 
 [![更新日志](https://recent-update.cfbed.sanyue.de/cn)](https://cfbed.sanyue.de/guide/update-log.html)
 
+## 🎬 视频压缩
+
+上传视频时可像图片压缩一样，在「上传设置 → 文件预处理」里开启视频压缩，并选择**压缩率**、**目标文件大小**和**压缩阈值**；压缩结果仍按所选渠道原样保存。图片压缩设置与原有图片上传行为完全不受影响。
+
+**默认关闭**。开启前需准备压缩引擎：
+
+| 部署方式 | 压缩引擎 | 说明 |
+| --- | --- | --- |
+| Docker / Node | 镜像内置 ffmpeg + ffprobe | 设置 `VIDEO_COMPRESS_ENABLED=true`，无需额外服务 |
+| Cloudflare Workers / Pages | 外部 ffmpeg 转码服务 | 配置 `VIDEO_COMPRESS_ENDPOINT`（POST 原始视频字节，返回压缩后视频字节） |
+
+常用环境变量（也可在「管理后台 → 上传设置」的 `videoCompression` 节点配置）：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `VIDEO_COMPRESS_ENABLED` | `false` | 总开关 |
+| `VIDEO_COMPRESS_QUALITY` | `70` | 画质 0–100，越大画质越好、体积越大 |
+| `VIDEO_COMPRESS_TARGET_SIZE_MB` | `0` | 目标大小(MB)，0 表示只按画质压缩 |
+| `VIDEO_COMPRESS_MAX_INPUT_MB` | `100` | 输入上限，超出返回 413 |
+| `VIDEO_COMPRESS_FORMAT` | `mp4` | 输出格式 `mp4` / `webm` |
+| `VIDEO_COMPRESS_ENDPOINT` / `VIDEO_COMPRESS_TOKEN` | 空 | Workers 部署的外部转码服务与令牌 |
+| `VIDEO_COMPRESS_TIMEOUT_MS` | `600000` | 单次转码超时 |
+
+单次上传可用 URL 参数覆盖：`videoCompress`、`videoQuality`、`videoTargetSizeMB`、`videoMaxInputMB`、`videoFormat`。
+
+支持输入：`mp4 / m4v / mov / webm / mkv / avi`。不支持的格式返回 415、超过输入上限返回 413、转码失败或超时返回 502/504，且**不会把未压缩的原文件偷偷上传**；压缩后反而更大时自动使用原文件。
+
+限制：转码需要完整文件，因此仅支持直传（非分块）上传；Workers/Pages 还受 100MB 请求体限制，大文件请使用 Docker 部署，或关闭视频压缩后走分块上传。
+
+### 动态照片模式
+
+切换到「动态照片上传」模式后，上传设置会打开**专用设置页**，其中「封面图片压缩」与「内嵌视频压缩」是两个相互独立的分区：
+
+- **封面图片压缩**：默认关闭，封面原样上传；开启后可设置压缩阈值、期望大小与是否转为 WebP。
+- **内嵌视频压缩**：默认开启，在浏览器本地用 `MediaRecorder` 重新编码 MP4/MOV 动态片段，无需服务端 ffmpeg；可设置压缩率、期望大小与输出视频最大边长。
+
+这两组设置只在动态照片模式生效，不会读取或改写普通上传模式的「文件预处理」设置；普通模式（文件上传 / 粘贴上传）的服务端视频压缩行为保持不变。
+
 # 4. 🌱 项目生态
 
 欢迎前往 [CloudFlare ImgBed 生态](https://cfbed.sanyue.de/about/ecosystem.html)，探索社区提供的扩展、应用和教程，包括：

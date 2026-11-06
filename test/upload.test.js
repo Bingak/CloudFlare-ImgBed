@@ -3,6 +3,7 @@ import { File } from 'node:buffer';
 import { loadFunction, memoryDatabase } from './helpers/loadFunction.js';
 import * as responses from '../functions/utils/apiResponse.js';
 import { png } from './helpers/files.js';
+import { maybeCompressVideo, isVideoCompressionCandidate } from '../functions/upload/videoCompression.js';
 
 describe('upload', () => {
     let db, tools, mocks, storage, waits;
@@ -30,6 +31,8 @@ describe('upload', () => {
             userAuthCheck: async () => true,
             UnauthorizedResponse,
             isBlockedUploadIp: async () => false,
+            maybeCompressVideo,
+            isVideoCompressionCandidate,
             getIPAddress: async () => '',
             getUploadIp: () => '',
             moderateContent: async () => 'None',
@@ -228,6 +231,83 @@ describe('upload', () => {
         assert.equal(response.status, 200, await response.clone().text());
         assert.equal((await db.getWithMetadata(fullId)).metadata.FileType, 'image/png');
         await Promise.all(waits);
+    });
+
+    it('compresses a video then stores the compressed bytes through the original channel', async () => {
+        const route = await loadFunction('functions/upload/index.js', mocks);
+        const form = new FormData();
+        const originalBytes = 4 * 1024 * 1024;
+        form.set('file', new File([new Uint8Array(originalBytes)], '跨屏协作.mov', { type: 'video/quicktime' }));
+        const ctx = context('https://test/upload?uploadChannel=cfr2&autoRetry=false&videoCompress=true&videoQuality=40&videoTargetSizeMB=1', form);
+        let processorInputSize = 0;
+        ctx.env.VIDEO_PROCESSOR = {
+            async compress(input, options) {
+                processorInputSize = input.byteLength;
+                return { data: new Uint8Array(Math.floor(input.byteLength / 4)), extension: options.format, type: 'video/mp4' };
+            },
+        };
+
+        const response = await route.onRequest(ctx);
+        assert.equal(response.status, 200, await response.clone().text());
+        const [{ src }] = await response.json();
+        assert.equal(src.endsWith('.mp4'), true);
+        const record = await db.getWithMetadata(src.slice('/file/'.length));
+        assert.equal(record.metadata.FileType, 'video/mp4');
+        assert.equal(record.metadata.FileSizeBytes, originalBytes / 4);
+        assert.equal(record.metadata.VideoCompressed, true);
+        assert.equal(record.metadata.VideoOriginalSizeBytes, originalBytes);
+        assert.equal(storage.contentType, 'video/mp4');
+        assert.equal(processorInputSize, originalBytes);
+        await Promise.all(waits);
+    });
+
+    it('keeps image uploads unchanged when video compression is requested', async () => {
+        const route = await loadFunction('functions/upload/index.js', mocks);
+        const form = new FormData();
+        form.set('file', new File([png()], 'photo.png', { type: 'image/png' }));
+        const response = await route.onRequest(context('https://test/upload?uploadChannel=cfr2&autoRetry=false&videoCompress=true', form));
+        assert.equal(response.status, 200, await response.clone().text());
+        const [{ src }] = await response.json();
+        const record = await db.getWithMetadata(src.slice('/file/'.length));
+        assert.equal(record.metadata.FileType, 'image/png');
+        assert.equal(record.metadata.FileSizeBytes, png().length);
+        assert.equal(record.metadata.VideoCompressed, undefined);
+        await Promise.all(waits);
+    });
+
+    for (const [name, type, query, expectedStatus, expectedMessage] of [
+        ['clip.flv', 'video/x-flv', '&videoCompress=true', 415, /Unsupported video format/],
+        ['clip.mp4', 'video/mp4', '&videoCompress=true&videoMaxInputMB=1', 413, /too large/],
+    ]) {
+        it(`rejects ${name} with ${expectedStatus} before writing any data: ${query}`, async () => {
+            const route = await loadFunction('functions/upload/index.js', mocks);
+            const form = new FormData();
+            form.set('file', new File([new Uint8Array(2 * 1024 * 1024)], name, { type }));
+            const response = await route.onRequest(context(`https://test/upload?uploadChannel=cfr2&autoRetry=false${query}`, form));
+            assert.equal(response.status, expectedStatus);
+            assert.match(await response.text(), expectedMessage);
+            assert.equal(db.records.size, 0);
+            assert.equal(storage.contentType, undefined);
+        });
+    }
+
+    it('reports compression failures instead of uploading the original video', async () => {
+        const route = await loadFunction('functions/upload/index.js', mocks);
+        const form = new FormData();
+        form.set('file', new File([new Uint8Array(1024)], 'clip.mp4', { type: 'video/mp4' }));
+        const ctx = context('https://test/upload?uploadChannel=cfr2&autoRetry=false&videoCompress=true', form);
+        ctx.env.VIDEO_PROCESSOR = { async compress() { throw new Error('ffmpeg exited with code 1'); } };
+        const response = await route.onRequest(ctx);
+        assert.equal(response.status, 502);
+        assert.match(await response.text(), /NOT uploaded/);
+        assert.equal(db.records.size, 0);
+    });
+
+    it('rejects video compression on chunked uploads with a clear hint', async () => {
+        const route = await loadFunction('functions/upload/index.js', mocks);
+        const response = await route.onRequest(context('https://test/upload?initChunked=true&videoCompress=true'));
+        assert.equal(response.status, 400);
+        assert.match(await response.text(), /does not support chunked uploads/);
     });
 
 });

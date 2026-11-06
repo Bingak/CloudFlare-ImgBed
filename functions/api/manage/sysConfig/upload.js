@@ -328,6 +328,20 @@ export async function getUploadConfig(db, env) {
     webdav.loadBalance = webdavLoadBalance
 
 
+    // =====================读取视频压缩配置=====================
+    // 默认关闭；配置缺失时保持原有上传行为不变。敏感值建议改用环境变量配置。
+    const videoCompressionKV = settingsKV.videoCompression || {}
+    settings.videoCompression = {
+        enabled: videoCompressionKV.enabled ?? false,
+        quality: videoCompressionKV.quality ?? 70,
+        targetSizeMB: videoCompressionKV.targetSizeMB ?? 0,
+        maxInputMB: videoCompressionKV.maxInputMB ?? 100,
+        format: videoCompressionKV.format ?? 'mp4',
+        endpoint: videoCompressionKV.endpoint ?? '',
+        token: videoCompressionKV.token ?? '',
+        timeoutMs: videoCompressionKV.timeoutMs ?? 600000,
+    }
+
     settings.telegram = telegram
     settings.cfr2 = cfr2
     settings.s3 = s3

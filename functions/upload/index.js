@@ -7,6 +7,7 @@ import {
     sanitizeUploadFolder
 } from "./uploadTools";
 import { getFileTypeCategory, normalizeMimeType, resolveFileType } from "../utils/mimeTypes.js";
+import { maybeCompressVideo, isVideoCompressionCandidate } from "./videoCompression.js";
 import { initializeChunkedUpload, handleChunkUpload, uploadLargeFileToTelegram, handleCleanupRequest } from "./chunkUpload";
 import { handleChunkMerge } from "./chunkMerge";
 import { TelegramAPI } from "../utils/storage/telegramAPI";
@@ -56,6 +57,10 @@ export async function onRequest(context) {  // Contents of context object
     // 检查是否为初始化分块上传请求
     const initChunked = url.searchParams.get('initChunked') === 'true';
     if (initChunked) {
+        // 分片不是完整的视频文件，无法转码；显式请求视频压缩时直接给出提示
+        if (url.searchParams.get('videoCompress') === 'true') {
+            return createResponse('Error: Video compression does not support chunked uploads. Please use a direct upload (smaller than the request body limit) or turn off video compression.', { status: 400 });
+        }
         return await initializeChunkedUpload(context);
     }
 
@@ -134,19 +139,37 @@ async function processFileUpload(context, formdata = null) {
 
     // 获取文件信息
     const time = new Date().getTime();
-    const file = formdata.get('file');
+    let file = formdata.get('file');
     let fileName = file.name;
     // 部分客户端（同步工具、脚本）不提供有效的 Content-Type，按扩展名兜底推断。
     // 否则图片会被记成 application/octet-stream，导致随机图类型过滤、尺寸提取、
     // 图片处理校验全部失效。
-    const fileType = resolveFileType(fileName, file.type);
-    const fileSizeBytes = file.size; // 文件大小，单位字节
-    const fileSize = (fileSizeBytes / 1024 / 1024).toFixed(2); // 文件大小，单位MB
+    let fileType = resolveFileType(fileName, file.type);
+    let fileSizeBytes = file.size; // 文件大小，单位字节
 
     // 检查fileType和fileName是否存在
     if (fileType === null || fileType === undefined || fileName === null || fileName === undefined) {
         return createResponse('Error: fileType or fileName is wrong, check the integrity of this file!', { status: 400 });
     }
+
+    // 视频压缩：默认关闭且仅对视频文件生效，图片与原有上传流程完全不受影响。
+    // 压缩后的文件写回 formdata，后续各渠道仍使用原有的 formdata.get('file') 上传。
+    let videoCompression = { compressed: false };
+    if (isVideoCompressionCandidate(fileName, fileType)) {
+        try {
+            videoCompression = await maybeCompressVideo(context, file, fileName, fileType);
+        } catch (error) {
+            return createResponse(`Error: ${error.message}`, { status: error.status || 500 });
+        }
+        if (videoCompression?.compressed && videoCompression.file) {
+            file = videoCompression.file;
+            fileName = videoCompression.fileName || file.name;
+            fileType = videoCompression.fileType || fileType;
+            fileSizeBytes = file.size;
+            formdata.set('file', file);
+        }
+    }
+    const fileSize = (fileSizeBytes / 1024 / 1024).toFixed(2); // 文件大小，单位MB
 
     // 提取图片尺寸
     let imageDimensions = null;
@@ -189,6 +212,12 @@ async function processFileUpload(context, formdata = null) {
     if (imageDimensions) {
         metadata.Width = imageDimensions.width;
         metadata.Height = imageDimensions.height;
+    }
+
+    // 记录视频压缩结果，便于在管理列表中追溯原文件体积
+    if (videoCompression.compressed) {
+        metadata.VideoCompressed = true;
+        metadata.VideoOriginalSizeBytes = videoCompression.originalSize;
     }
 
     const fileExt = resolveFileExt(fileName, fileType);

@@ -132,6 +132,42 @@ Follow the latest features, bug fixes, compatibility changes, and upgrade notes.
 
 [![Recent Updates](https://recent-update.cfbed.sanyue.de/en)](https://cfbed.sanyue.de/en/guide/update-log.html)
 
+## 🎬 Video Compression
+
+Videos can be compressed just like images: open **Upload Settings → File Preprocessing**, enable video compression, then choose the **compression rate**, **target file size** and **compression threshold**. The compressed file is stored through the existing upload channel. Image compression settings and existing image uploads are unaffected.
+
+**Disabled by default.** A compression backend is required:
+
+| Deployment | Backend | Setup |
+| --- | --- | --- |
+| Docker / Node | Built-in ffmpeg + ffprobe | Set `VIDEO_COMPRESS_ENABLED=true` |
+| Cloudflare Workers / Pages | External transcoding service | Set `VIDEO_COMPRESS_ENDPOINT` (POST raw video bytes, return compressed video bytes) |
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VIDEO_COMPRESS_ENABLED` | `false` | Master switch |
+| `VIDEO_COMPRESS_QUALITY` | `70` | Quality 0–100; higher means better quality and a larger file |
+| `VIDEO_COMPRESS_TARGET_SIZE_MB` | `0` | Target size in MB; `0` uses quality only |
+| `VIDEO_COMPRESS_MAX_INPUT_MB` | `100` | Input limit, returns HTTP 413 above it |
+| `VIDEO_COMPRESS_FORMAT` | `mp4` | Output format: `mp4` or `webm` |
+| `VIDEO_COMPRESS_ENDPOINT` / `VIDEO_COMPRESS_TOKEN` | empty | External service URL and bearer token |
+| `VIDEO_COMPRESS_TIMEOUT_MS` | `600000` | Per-transcode timeout |
+
+Per-upload overrides: `videoCompress`, `videoQuality`, `videoTargetSizeMB`, `videoMaxInputMB`, `videoFormat`.
+
+Supported inputs: `mp4 / m4v / mov / webm / mkv / avi`. Unsupported formats return 415, oversized inputs 413, and transcoding failures/timeouts 502/504 — the uncompressed original is **never silently uploaded**. If the output is not smaller, the original is kept.
+
+Limitations: transcoding needs the complete file, so only direct (non-chunked) uploads are supported. Workers/Pages also have a 100 MB request body limit; use the Docker image for larger videos, or disable compression and use chunked upload.
+
+### Live Photo mode
+
+When **Live Photo upload** is selected, Upload Settings opens a **dedicated page** with two clearly separated, independent groups:
+
+- **Cover Image Compression** — off by default so the cover is uploaded as-is; when enabled, configure the threshold, target size and optional WebP conversion.
+- **Embedded Video Compression** — on by default; the MP4/MOV motion clip is re-encoded locally in the browser with `MediaRecorder`, so no server ffmpeg is needed. Configure the compression rate, target size and maximum output edge.
+
+These options only apply to Live Photo mode. They neither read nor modify the regular **File Preprocessing** settings, and server-side video compression in the normal upload modes is unchanged.
+
 # 4. 🌱 Ecosystem
 
 An open-source ecosystem grows through community support. Visit the [CloudFlare ImgBed Ecosystem](https://cfbed.sanyue.de/en/about/ecosystem.html) page to explore the following resources and more:

@@ -32,6 +32,14 @@ binding = "IMAGES"
 # AI_CONFIG_SECRET 请配置为 Secret，值为至少 32 个字符的随机密钥。
 # TG_BOT_TOKEN = ""
 # TG_CHAT_ID = ""
+# Workers 运行时无法执行 ffmpeg，视频压缩需指向外部转码服务：
+# VIDEO_COMPRESS_ENABLED = "false"
+# VIDEO_COMPRESS_ENDPOINT = "https://your-ffmpeg-service.example.com/compress"
+# VIDEO_COMPRESS_TOKEN = ""          # 建议使用 wrangler secret put
+# VIDEO_COMPRESS_QUALITY = "70"      # 画质 0-100
+# VIDEO_COMPRESS_TARGET_SIZE_MB = "20"
+# VIDEO_COMPRESS_MAX_INPUT_MB = "100" # Workers 请求体上限为 100MB
+# VIDEO_COMPRESS_FORMAT = "mp4"
 
 # [[d1_databases]]
 # binding = "img_d1"

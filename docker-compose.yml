@@ -1,8 +1,15 @@
 services:
   imgbed:
     image: marseventh/cloudflare-imgbed:latest
-    # environment:
-    #   AI_CONFIG_SECRET: "" # 填写至少 32 个字符的随机密钥，用于加密保存 AI 供应商 API Key
+    environment:
+      # 视频压缩默认关闭；开启后使用镜像内置的 ffmpeg 转码
+      VIDEO_COMPRESS_ENABLED: "false"
+      # VIDEO_COMPRESS_QUALITY: "70"          # 画质 0-100，越大画质越好、体积越大
+      # VIDEO_COMPRESS_TARGET_SIZE_MB: "20"   # 目标文件大小(MB)，0 表示只按画质压缩
+      # VIDEO_COMPRESS_MAX_INPUT_MB: "500"    # 输入上限(MB)，超过会返回 413
+      # VIDEO_COMPRESS_FORMAT: "mp4"         # 输出格式 mp4 / webm
+      # VIDEO_COMPRESS_TIMEOUT_MS: "600000"  # 单次转码超时(ms)
+      # AI_CONFIG_SECRET: "" # 填写至少 32 个字符的随机密钥，用于加密保存 AI 供应商 API Key
     ports:
       - "7658:8080"
     volumes:

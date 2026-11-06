@@ -28,4 +28,12 @@ const middleware = await import('../../functions/api/manage/_middleware.js');
 assert.ok(Array.isArray(middleware.onRequest));
 assert.ok(middleware.onRequest.length > 0);
 assert.ok(middleware.onRequest.every(handler => typeof handler === 'function'));
-console.log(`Server imports passed: ${routes.length} routes and management middleware`);
+
+// Video compression runs in both runtimes: the Worker-facing orchestrator and
+// the Docker/Node ffmpeg adapter must load without source rewriting.
+const videoCompression = await import('../../functions/upload/videoCompression.js');
+assert.equal(typeof videoCompression.maybeCompressVideo, 'function');
+const videoProcessor = await import('../../deploy/server/videoProcessor.js');
+assert.equal(typeof videoProcessor.dockerVideoProcessor.compress, 'function');
+
+console.log(`Server imports passed: ${routes.length} routes, management middleware and video compression modules`);

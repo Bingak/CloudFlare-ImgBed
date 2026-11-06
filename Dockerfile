@@ -13,7 +13,7 @@ RUN apt-get update && \
 FROM node:22-slim AS runtime
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl && \
+    apt-get install -y --no-install-recommends ca-certificates curl ffmpeg && \
     update-ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
