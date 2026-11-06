@@ -140,9 +140,10 @@ Videos can be compressed just like images: open **Upload Settings → File Prepr
 
 Compression **runs locally in the browser** (`MediaRecorder` + `canvas.captureStream` re-encoding) and does not need server ffmpeg, so **Cloudflare Workers / Pages deployments work too** — there is no "no compression backend" 503:
 
-- Enabled by default in **Upload Settings → File Preprocessing** (rate 75%, threshold 5 MB, target size 0 i.e. rate only, max input 100 MB); image compression defaults to a 1 MB threshold, a 0.8 MB target and WebP conversion on.
+- Enabled by default in **Upload Settings → File Preprocessing** (rate 50% — a clarity/size balance you can adjust, threshold 5 MB, target size 0 i.e. rate only, max input 100 MB, output max edge 1920px so resolution is not reduced unnecessarily); image compression defaults to a 1 MB threshold, a 0.8 MB target and WebP conversion on.
 - Live Photo's embedded video shares the same browser encoder, with its own independent settings.
 - The browser needs `MediaRecorder` support and must be able to decode the source. If decoding fails, encoding times out, or the output is not meaningfully smaller, a clear hint is shown and the **original file is uploaded normally** — the upload never fails.
+- A dropped video **appears in the list immediately** with a "Compressing video xx%" label and progress bar; it switches to upload progress once compression finishes, so there is no silent wait.
 - **WebCodecs is used first for non-realtime encoding** (`VideoDecoder` / `VideoEncoder` decode and re-encode as fast as the CPU allows, with no waiting for playback; short clips usually finish in 1–3 seconds). Browsers without WebCodecs, or sources that are not H.264/AAC MP4, fall back to `MediaRecorder` realtime recording. No duration/size gate is imposed; only a safety timeout prevents hangs. AAC-LC audio samples are copied through without re-encoding.
 
 ### Backend: server-side transcoding (optional, for direct `/upload` API callers)
