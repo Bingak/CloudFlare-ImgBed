@@ -136,7 +136,7 @@ Follow the latest features, bug fixes, compatibility changes, and upgrade notes.
 
 Videos can be compressed just like images: open **Upload Settings → File Preprocessing**, enable video compression, then choose the **compression rate**, **target file size** and **compression threshold**. The compressed file is stored through the existing upload channel. Image compression settings and existing image uploads are unaffected.
 
-**Disabled by default.** A compression backend is required:
+Video compression is **enabled by default** in **Upload Settings → File Preprocessing** (rate 75%, threshold 5 MB, target size 0 i.e. rate only, max input 100 MB); image compression defaults to a 1 MB threshold, a 0.8 MB target and WebP conversion on. A compression backend is still required — without one, videos above the threshold get a clear HTTP 503 instead of the original being silently uploaded:
 
 | Deployment | Backend | Setup |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ Videos can be compressed just like images: open **Upload Settings → File Prepr
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VIDEO_COMPRESS_ENABLED` | `false` | Master switch |
+| `VIDEO_COMPRESS_ENABLED` | `false` | Master switch (applies only when no URL parameter is sent; the frontend explicitly passes `videoCompress` from its settings) |
 | `VIDEO_COMPRESS_QUALITY` | `70` | Quality 0–100; higher means better quality and a larger file |
 | `VIDEO_COMPRESS_TARGET_SIZE_MB` | `0` | Target size in MB; `0` uses quality only |
 | `VIDEO_COMPRESS_MAX_INPUT_MB` | `100` | Input limit, returns HTTP 413 above it |
@@ -163,8 +163,8 @@ Limitations: transcoding needs the complete file, so only direct (non-chunked) u
 
 When **Live Photo upload** is selected, Upload Settings opens a **dedicated page** with two clearly separated, independent groups:
 
-- **Cover Image Compression** — off by default so the cover is uploaded as-is; when enabled, configure the threshold, target size and optional WebP conversion.
-- **Embedded Video Compression** — on by default; the MP4/MOV motion clip is re-encoded locally in the browser with `MediaRecorder`, so no server ffmpeg is needed. Configure the compression rate, target size and maximum output edge.
+- **Cover Image Compression** — on by default (1 MB threshold, 0.8 MB target, WebP conversion off); turn it off to upload the cover as-is. All options are adjustable.
+- **Embedded Video Compression** — on by default (rate 70%, target size 0, max edge 1280px); the MP4/MOV motion clip is re-encoded locally in the browser with `MediaRecorder`, so no server ffmpeg is needed. All options are adjustable.
 
 These options only apply to Live Photo mode. They neither read nor modify the regular **File Preprocessing** settings, and server-side video compression in the normal upload modes is unchanged.
 
