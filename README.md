@@ -136,7 +136,18 @@ Follow the latest features, bug fixes, compatibility changes, and upgrade notes.
 
 Videos can be compressed just like images: open **Upload Settings → File Preprocessing**, enable video compression, then choose the **compression rate**, **target file size** and **compression threshold**. The compressed file is stored through the existing upload channel. Image compression settings and existing image uploads are unaffected.
 
-Video compression is **enabled by default** in **Upload Settings → File Preprocessing** (rate 75%, threshold 5 MB, target size 0 i.e. rate only, max input 100 MB); image compression defaults to a 1 MB threshold, a 0.8 MB target and WebP conversion on. A compression backend is still required — without one, videos above the threshold get a clear HTTP 503 instead of the original being silently uploaded:
+### Frontend: browser-local compression (default)
+
+Compression **runs locally in the browser** (`MediaRecorder` + `canvas.captureStream` re-encoding) and does not need server ffmpeg, so **Cloudflare Workers / Pages deployments work too** — there is no "no compression backend" 503:
+
+- Enabled by default in **Upload Settings → File Preprocessing** (rate 75%, threshold 5 MB, target size 0 i.e. rate only, max input 100 MB); image compression defaults to a 1 MB threshold, a 0.8 MB target and WebP conversion on.
+- Live Photo's embedded video shares the same browser encoder, with its own independent settings.
+- The browser needs `MediaRecorder` support and must be able to decode the source. If decoding fails, encoding times out, or the output is not meaningfully smaller, a clear hint is shown and the **original file is uploaded normally** — the upload never fails.
+- **WebCodecs is used first for non-realtime encoding** (`VideoDecoder` / `VideoEncoder` decode and re-encode as fast as the CPU allows, with no waiting for playback; short clips usually finish in 1–3 seconds). Browsers without WebCodecs, or sources that are not H.264/AAC MP4, fall back to `MediaRecorder` realtime recording. No duration/size gate is imposed; only a safety timeout prevents hangs. AAC-LC audio samples are copied through without re-encoding.
+
+### Backend: server-side transcoding (optional, for direct `/upload` API callers)
+
+The frontend no longer sends the `videoCompress` parameter. The following capability is kept for scripts and sync tools calling the upload API directly. If you previously enabled `videoCompression.enabled` in the admin settings for the old frontend but have no ffmpeg or external service, set it back to `false` — browser-local compression does not need that switch:
 
 | Deployment | Backend | Setup |
 | --- | --- | --- |
@@ -145,7 +156,7 @@ Video compression is **enabled by default** in **Upload Settings → File Prepro
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `VIDEO_COMPRESS_ENABLED` | `false` | Master switch (applies only when no URL parameter is sent; the frontend explicitly passes `videoCompress` from its settings) |
+| `VIDEO_COMPRESS_ENABLED` | `false` | Master switch (applies only to direct API calls that send no URL parameter) |
 | `VIDEO_COMPRESS_QUALITY` | `70` | Quality 0–100; higher means better quality and a larger file |
 | `VIDEO_COMPRESS_TARGET_SIZE_MB` | `0` | Target size in MB; `0` uses quality only |
 | `VIDEO_COMPRESS_MAX_INPUT_MB` | `100` | Input limit, returns HTTP 413 above it |
@@ -157,7 +168,7 @@ Per-upload overrides: `videoCompress`, `videoQuality`, `videoTargetSizeMB`, `vid
 
 Supported inputs: `mp4 / m4v / mov / webm / mkv / avi`. Unsupported formats return 415, oversized inputs 413, and transcoding failures/timeouts 502/504 — the uncompressed original is **never silently uploaded**. If the output is not smaller, the original is kept.
 
-Limitations: transcoding needs the complete file, so only direct (non-chunked) uploads are supported. Workers/Pages also have a 100 MB request body limit; use the Docker image for larger videos, or disable compression and use chunked upload.
+Server-side transcoding limitations: it needs the complete file, so only direct (non-chunked) uploads are supported, and Workers/Pages have a 100 MB request body limit. These do **not** affect browser-local compression — the locally compressed file goes through the normal upload path and large files can still use chunked upload.
 
 ### Live Photo mode
 
@@ -166,7 +177,7 @@ When **Live Photo upload** is selected, Upload Settings opens a **dedicated page
 - **Cover Image Compression** — on by default (1 MB threshold, 0.8 MB target, WebP conversion off); turn it off to upload the cover as-is. All options are adjustable.
 - **Embedded Video Compression** — on by default (rate 70%, target size 0, max edge 1280px); the MP4/MOV motion clip is re-encoded locally in the browser with `MediaRecorder`, so no server ffmpeg is needed. All options are adjustable.
 
-These options only apply to Live Photo mode. They neither read nor modify the regular **File Preprocessing** settings, and server-side video compression in the normal upload modes is unchanged.
+These options only apply to Live Photo mode. They neither read nor modify the regular **File Preprocessing** settings; both modes compress video locally in the browser and need no server ffmpeg.
 
 # 4. 🌱 Ecosystem
 
